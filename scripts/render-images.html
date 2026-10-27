@@ -1,0 +1,84 @@
+<!doctype html><html><head><style>html,body{margin:0;background:#000}</style>
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script></head>
+<body><script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+const q = new URLSearchParams(location.search); const kind = q.get('kind'); const W=+q.get('w'), H=+q.get('h');
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H); renderer.setPixelRatio(1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#000');
+const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.fog = new THREE.Fog('#000', 8, 22);
+const gold = (r=0.24, c='#DFB576') => new THREE.MeshPhysicalMaterial({ color: c, metalness: 1, roughness: r, clearcoat: .5, clearcoatRoughness: .25 });
+const dark = new THREE.MeshStandardMaterial({ color: '#0d0a06', metalness: .5, roughness: .45 });
+const ivory = new THREE.MeshPhysicalMaterial({ color: '#efe7da', roughness: .3, clearcoat: .8 });
+const cam = new THREE.PerspectiveCamera(35, W/H, .1, 100);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(80,80), new THREE.MeshStandardMaterial({ color:'#000000', metalness:0, roughness:.92, envMapIntensity:0 }));
+floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
+const key = new THREE.DirectionalLight('#ffe2b0', 2.2); key.position.set(4,8,5); key.castShadow = true; key.shadow.mapSize.set(2048,2048);
+Object.assign(key.shadow.camera,{left:-10,right:10,top:10,bottom:-10}); scene.add(key);
+const rim = new THREE.PointLight('#ffb866', 40, 30); rim.position.set(-4,4,-5); scene.add(rim);
+const add = (geo, mat, x,y,z, rx=0,ry=0,rz=0) => { const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.rotation.set(rx,ry,rz); m.castShadow=m.receiveShadow=true; scene.add(m); return m; };
+// soft glow disc behind
+const glow = (x,y,z,s,a=.5) => { const c=document.createElement('canvas'); c.width=c.height=256; const g=c.getContext('2d'); const gr=g.createRadialGradient(128,128,0,128,128,128); gr.addColorStop(0,`rgba(223,181,118,${a})`); gr.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=gr; g.fillRect(0,0,256,256); const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending})); sp.position.set(x,y,z); sp.scale.set(s,s,1); scene.add(sp); };
+
+if (kind==='realestate') {
+  glow(0,4,-6,16,.45);
+  for (let i=-3;i<=3;i++) for (let j=-3;j<=2;j++) {
+    const d=Math.hypot(i,j); if (rnd()<.15) continue;
+    const h = Math.max(.6, (5.2 - d*1.05) * (0.6+rnd()*.6));
+    const w = .78; const mat = rnd()<.6 ? gold(.18+rnd()*.2) : dark;
+    add(new RoundedBoxGeometry(w,h,w,4,.12), mat, i*1.0, h/2, j*1.0);
+  }
+  cam.position.set(5.5,1.6,7.5); cam.lookAt(0,2.4,-0.5);
+}
+if (kind==='hospitality') {
+  glow(0,3,-6,14,.6);
+  add(new THREE.SphereGeometry(1.1,64,64), gold(.12), 0,2.6,-5.2);
+  for (let k=0;k<4;k++) { const r=2.6-k*0.1; add(new THREE.TorusGeometry(r,.13,32,128,Math.PI), gold(.2+k*.05), 0,0,-k*1.6); }
+  for (let k=0;k<4;k++) add(new RoundedBoxGeometry(5.6,.12,1.2,3,.05), dark, 0,.06,-k*1.6+.1);
+  cam.position.set(1.6,1.5,6.2); cam.lookAt(0,1.6,-2.5);
+}
+if (kind==='healthcare') {
+  glow(.5,2,-4,12,.4);
+  const cap = (x,y,z,rx,ry,rz,s=1) => { const g=new THREE.Group(); const c1=new THREE.Mesh(new THREE.CapsuleGeometry(.32*s,.5*s,16,48),gold(.2)); c1.position.y=.0; 
+    const half=new THREE.Mesh(new THREE.CylinderGeometry(.325*s,.325*s,.5*s,48),ivory); half.position.y=-.25*s*0.5; const bot=new THREE.Mesh(new THREE.SphereGeometry(.325*s,48,24,0,Math.PI*2,Math.PI/2,Math.PI/2),ivory); bot.position.y=-.25*s;
+    [c1,half,bot].forEach(m=>{m.castShadow=true; g.add(m)}); g.position.set(x,y,z); g.rotation.set(rx,ry,rz); scene.add(g); };
+  for (let i=0;i<26;i++){ const a=rnd()*Math.PI*2, r=.6+rnd()*3.2; cap(Math.cos(a)*r, .33, Math.sin(a)*r-1, Math.PI/2, rnd()*6, 0, .9+rnd()*.3); }
+  for (let i=0;i<5;i++) cap(-2+rnd()*4, 1.3+rnd()*2.2, -2.5-rnd()*2, rnd()*6, rnd()*6, rnd()*6, 1.1);
+  cam.position.set(0,3.6,8.6); cam.lookAt(0,1.1,-1.2);
+}
+if (kind==='education') {
+  glow(0,5,-5,14,.5);
+  for (let k=0;k<14;k++){ const a=k*.42, r=2.2; add(new RoundedBoxGeometry(1.5,.22,.9,3,.06), k%3===0?dark:gold(.22), Math.cos(a)*r, .2+k*.38, Math.sin(a)*r-1.5, 0, -a, 0); }
+  add(new THREE.SphereGeometry(.55,64,64), gold(.1), Math.cos(14*.42)*2.2*0.2, .2+14*.38+.6, -1.5);
+  add(new THREE.CylinderGeometry(.22,.22,5.6,48), dark, 0,2.8,-1.5);
+  cam.position.set(4.4,2.4,7.4); cam.lookAt(0,3,-1.4);
+}
+if (kind==='ecommerce') {
+  glow(0,2.5,-4,13,.5);
+  const box=(x,y,z,s,rx,ry,rz,m)=>{ const b=add(new RoundedBoxGeometry(s,s,s,4,.08*s), m, x,y,z,rx,ry,rz);
+    if(m!==dark){ const band=new THREE.Mesh(new RoundedBoxGeometry(s*1.01,s*1.01,s*.16,2,.02),dark); b.add(band); } };
+  box(-1.1,.6,0,1.2,0,.4,0,gold(.22)); box(.35,.45,.4,.9,0,-.3,0,dark); box(-.3,1.65,-.1,.85,0,.9,0,gold(.18));
+  box(1.4,.55,-.9,1.1,0,.2,0,gold(.3)); box(.8,2.8,-.4,.7,.6,.5,.3,gold(.15)); box(-1.6,3.2,-.8,.55,.9,.2,.6,gold(.2)); box(1.9,2.0,.3,.45,.3,1,.2,dark);
+  cam.position.set(1.2,2.3,6.6); cam.lookAt(0,1.4,-.3);
+}
+if (kind==='hive') {
+  scene.fog = new THREE.Fog('#000', 6, 16);
+  const R=.5; const geo=new THREE.CylinderGeometry(R*.93,R*.93,1,6); geo.translate(0,-.5,0);
+  const glowM = new THREE.MeshPhysicalMaterial({ color:'#DFB576', metalness:.6, roughness:.25, emissive:'#c98a2e', emissiveIntensity:.55 });
+  for (let qq=-14;qq<=14;qq++) for (let r=-12;r<=6;r++){ const x=Math.sqrt(3)*R*(qq+r/2), z=1.5*R*r; if (Math.abs(x)>11) continue;
+    const d=Math.hypot(x*.8,z+2); const h=.2+Math.max(0,Math.sin(d*1.3))*.5*Math.exp(-d*.12)+rnd()*.15;
+    const m = rnd()<.07 ? glowM : (d<2.5||rnd()<.35 ? gold(.25+rnd()*.15) : dark);
+    const c=add(geo,m,x,h,z); }
+  rim.position.set(0,3,-3); rim.intensity=50; renderer.toneMappingExposure=.82;
+  cam.position.set(0,3.4,6.2); cam.lookAt(0,0,-1.8);
+}
+renderer.render(scene, cam);
+window.__done = true;
+</script></body></html>
